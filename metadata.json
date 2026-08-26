@@ -1,0 +1,6 @@
+{
+  "name": "YT Analytics",
+  "description": "Application Android native d'analyse de chaînes YouTube avec architecture MVP, Room et Retrofit.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

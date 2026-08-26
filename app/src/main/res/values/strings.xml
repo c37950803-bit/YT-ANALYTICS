@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">YT Analytics</string>
+    <string name="title_home">Accueil</string>
+    <string name="title_dashboard">Tableau de bord</string>
+    <string name="title_api_keys">Gestion des clés API</string>
+    <string name="title_about">À propos</string>
+    <string name="title_player">Lecteur Vidéo</string>
+</resources>
