@@ -1,11 +1,13 @@
 package com.example.data.repository
 
+import com.example.data.local.dao.ApiKeyDao
 import com.example.data.local.dao.ChannelDao
 import com.example.data.local.dao.VideoDao
 import com.example.data.local.entity.ChannelEntity
 import com.example.data.local.entity.VideoEntity
 import com.example.data.remote.api.YouTubeApiService
 import com.example.data.remote.model.YouTubeChannelItem
+import com.example.data.remote.model.YouTubeChannelListResponse
 import com.example.data.remote.model.YouTubeVideoItemDto
 import com.example.domain.model.ChannelDetails
 import com.example.domain.model.ChannelQueryParser
@@ -14,6 +16,7 @@ import com.example.domain.model.DashboardAnalysis
 import com.example.domain.model.VideoItem
 import com.example.domain.result.Resource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -60,12 +63,17 @@ interface YouTubeRepository {
 }
 
 /**
- * Implémentation concrète du Repository YouTube.
+ * Implémentation concrète du Repository YouTube avec système de Fallback robuste à plusieurs niveaux :
+ * 1. Rotation automatique de clés API (Clé demandée -> Clé active Room -> Autres clés enregistrées -> Clé built-in de secours).
+ * 2. Résolution résiliente d'identifiants de chaînes (Channel ID -> Handle avec '@' -> Handle sans '@' -> Nom d'utilisateur legacy).
+ * 3. Reprise sur erreur réseau temporaire (Retry avec backoff).
+ * 4. Fallback vers le cache local Room complet en cas d'épuisement total des quotas ou mode hors-ligne.
  */
 class YouTubeRepositoryImpl(
     private val apiService: YouTubeApiService,
     private val channelDao: ChannelDao,
-    private val videoDao: VideoDao
+    private val videoDao: VideoDao,
+    private val apiKeyDao: ApiKeyDao
 ) : YouTubeRepository {
 
     override fun getHistory(): Flow<List<ChannelDetails>> {
@@ -76,55 +84,77 @@ class YouTubeRepositoryImpl(
 
     override suspend fun getCachedAnalysis(channelId: String): DashboardAnalysis? = withContext(Dispatchers.IO) {
         val channelEntity = channelDao.getChannelById(channelId) ?: return@withContext null
-        val videoEntities = videoDao.getVideosListForChannel(channelId)
-
-        val channel = channelEntity.toDomain()
-        val videos = videoEntities.map { it.toDomain() }
-
-        // Extraction des statistiques clés depuis le cache
-        val top5 = videos.filter { it.isTop5 }.sortedByDescending { it.viewCount }.ifEmpty {
-            videos.sortedByDescending { it.viewCount }.take(5)
-        }.mapIndexed { index, item -> item.copy(rank = index + 1) }
-
-        val mostViewed = videos.firstOrNull { it.isMostViewed }
-            ?: videos.maxByOrNull { it.viewCount }
-
-        val mostCommented = videos.firstOrNull { it.isMostCommented }
-            ?: videos.maxByOrNull { it.commentCount }
-
-        DashboardAnalysis(
-            channel = channel,
-            top5Videos = top5,
-            mostViewedVideo = mostViewed,
-            mostCommentedVideo = mostCommented,
-            isFromCache = true,
-            analysisTimestamp = channelEntity.cachedAtTimestamp
-        )
+        buildDashboardFromCachedEntity(channelEntity)
     }
 
     override suspend fun analyzeChannel(query: String, apiKey: String): Resource<DashboardAnalysis> = withContext(Dispatchers.IO) {
-        try {
-            if (apiKey.isBlank()) {
-                return@withContext Resource.Error(
-                    message = "Aucune clé API configurée. Veuillez ajouter une clé API YouTube valide.",
-                    errorType = Resource.ErrorType.NO_API_KEY
-                )
-            }
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) {
+            return@withContext Resource.Error(
+                message = "Veuillez saisir une URL ou un nom de chaîne YouTube.",
+                errorType = Resource.ErrorType.GENERIC
+            )
+        }
 
-            // 1. Analyse de la saisie utilisateur (URL / Handle / ID)
+        // 1. Construction de la chaîne de clés candidates (Robuste multi-key fallback)
+        val candidateKeys = buildCandidateKeysList(apiKey)
+
+        var lastError: Resource.Error? = null
+
+        // 2. Itération sur chaque clé candidate jusqu'à succès
+        for (currentKey in candidateKeys) {
+            val result = executeAnalysisWithKey(cleanQuery, currentKey)
+            when (result) {
+                is Resource.Success -> {
+                    return@withContext result
+                }
+                is Resource.Error -> {
+                    lastError = result
+                    // Si l'erreur est un dépassement de quota ou une clé invalide, on bascule silencieusement sur la clé suivante
+                    if (result.errorType == Resource.ErrorType.QUOTA_EXCEEDED ||
+                        result.errorType == Resource.ErrorType.INVALID_API_KEY
+                    ) {
+                        continue
+                    }
+                    // Si la chaîne est explicitement introuvable ou erreur réseau non récupérable, on sort
+                    if (result.errorType == Resource.ErrorType.CHANNEL_NOT_FOUND) {
+                        break
+                    }
+                }
+                is Resource.Loading -> Unit
+            }
+        }
+
+        // 3. Fallback ultime : si toutes les clés ont échoué (quota/réseau), vérifier si la chaîne existe dans le cache local
+        val localCached = findInLocalCache(cleanQuery)
+        if (localCached != null) {
+            return@withContext Resource.Success(localCached)
+        }
+
+        // 4. Si aucun cache disponible, retourner la dernière erreur explicite
+        lastError ?: Resource.Error(
+            message = "Impossible de récupérer les données YouTube pour cette chaîne.",
+            errorType = Resource.ErrorType.GENERIC
+        )
+    }
+
+    /**
+     * Exécute l'analyse d'une chaîne pour une clé API donnée, avec résolution multi-stratégie.
+     */
+    private suspend fun executeAnalysisWithKey(query: String, key: String): Resource<DashboardAnalysis> {
+        return try {
             val queryType = ChannelQueryParser.parse(query)
 
-            // 2. Appel Réseau 1 : Récupération des informations de la chaîne
-            val channelResponse = fetchChannelInfo(queryType, apiKey)
+            // Appel Réseau 1 : Résolution de la chaîne avec stratégie de secours intelligente
+            val channelResponse = fetchChannelInfoWithFallback(queryType, key)
 
-            // Gestion des erreurs HTTP (Quotas, clé invalide, etc.)
             if (!channelResponse.isSuccessful) {
-                return@withContext handleHttpError(channelResponse.code(), channelResponse.errorBody()?.string())
+                return handleHttpError(channelResponse.code(), channelResponse.errorBody()?.string())
             }
 
             val channelItems = channelResponse.body()?.items
             if (channelItems.isNullOrEmpty()) {
-                return@withContext Resource.Error(
+                return Resource.Error(
                     message = "Chaîne introuvable. Vérifiez l'URL ou le Handle saisi.",
                     errorType = Resource.ErrorType.CHANNEL_NOT_FOUND
                 )
@@ -136,7 +166,6 @@ class YouTubeRepositoryImpl(
             val stats = channelDto.statistics
             val branding = channelDto.brandingSettings
 
-            // Détermination de l'ID de la playlist "Uploads"
             // Règle métier YouTube : l'ID uploads commence par "UU" au lieu de "UC"
             val uploadsPlaylistId = channelDto.contentDetails?.relatedPlaylists?.uploads
                 ?: if (channelId.startsWith("UC")) "UU" + channelId.removePrefix("UC") else null
@@ -156,32 +185,35 @@ class YouTubeRepositoryImpl(
                 cachedAtTimestamp = System.currentTimeMillis()
             )
 
-            // 3. Appel Réseau 2 : Récupération des vidéos récentes de la chaîne
+            // Appel Réseau 2 : Récupération des vidéos récentes
             var processedVideos: List<VideoItem> = emptyList()
 
             if (!uploadsPlaylistId.isNullOrBlank()) {
-                val playlistResponse = apiService.getPlaylistItems(
-                    playlistId = uploadsPlaylistId,
-                    maxResults = 50,
-                    apiKey = apiKey
-                )
+                val playlistResponse = tryWithRetry {
+                    apiService.getPlaylistItems(
+                        playlistId = uploadsPlaylistId,
+                        maxResults = 50,
+                        apiKey = key
+                    )
+                }
 
-                if (playlistResponse.isSuccessful) {
+                if (playlistResponse != null && playlistResponse.isSuccessful) {
                     val playlistItems = playlistResponse.body()?.items ?: emptyList()
                     val videoIds = playlistItems.mapNotNull {
                         it.contentDetails?.videoId ?: it.snippet?.resourceId?.videoId
                     }.filter { it.isNotBlank() }
 
                     if (videoIds.isNotEmpty()) {
-                        // 4. Appel Réseau 3 : Récupération des statistiques détaillées des vidéos (Vues, Likes, Commentaires)
-                        // L'endpoint videos accepte jusqu'à 50 IDs séparés par des virgules en un seul appel
+                        // Appel Réseau 3 : Statistiques détaillées des vidéos
                         val idsParam = videoIds.joinToString(",")
-                        val videosDetailsResponse = apiService.getVideosDetails(
-                            videoIds = idsParam,
-                            apiKey = apiKey
-                        )
+                        val videosDetailsResponse = tryWithRetry {
+                            apiService.getVideosDetails(
+                                videoIds = idsParam,
+                                apiKey = key
+                            )
+                        }
 
-                        if (videosDetailsResponse.isSuccessful) {
+                        if (videosDetailsResponse != null && videosDetailsResponse.isSuccessful) {
                             val videoDetailsList = videosDetailsResponse.body()?.items ?: emptyList()
                             processedVideos = mapToVideoItems(videoDetailsList, channelId)
                         }
@@ -189,18 +221,15 @@ class YouTubeRepositoryImpl(
                 }
             }
 
-            // 5. Traitement métier et Algorithmes de tri
-            // a. Détermination des deux champions
+            // Calcul des champions et du Top 5
             val mostViewedVideo = processedVideos.maxByOrNull { it.viewCount }
             val mostCommentedVideo = processedVideos.maxByOrNull { it.commentCount }
 
-            // b. Calcul du Top 5 des vidéos les plus vues
             val top5Videos = processedVideos
                 .sortedByDescending { it.viewCount }
                 .take(5)
                 .mapIndexed { index, video -> video.copy(rank = index + 1, isTop5 = true) }
 
-            // c. Mise à jour des drapeaux dans la liste complète
             val top5Ids = top5Videos.map { it.videoId }.toSet()
             val finalVideos = processedVideos.map { video ->
                 video.copy(
@@ -210,7 +239,7 @@ class YouTubeRepositoryImpl(
                 )
             }
 
-            // 6. Sauvegarde en cache local Room (Source unique de vérité)
+            // Sauvegarde dans la base locale Room
             saveToLocalDatabase(channelDetails, finalVideos)
 
             val analysis = DashboardAnalysis(
@@ -226,17 +255,159 @@ class YouTubeRepositoryImpl(
 
         } catch (e: IOException) {
             Resource.Error(
-                message = "Erreur de connexion : vérifiez votre accès Internet.",
+                message = "Erreur de connexion Internet : ${e.localizedMessage ?: "Vérifiez votre réseau."}",
                 errorType = Resource.ErrorType.NETWORK_ERROR,
                 cause = e
             )
         } catch (e: Exception) {
             Resource.Error(
-                message = e.localizedMessage ?: "Une erreur inattendue est survenue lors de l'analyse.",
+                message = e.localizedMessage ?: "Une erreur inattendue est survenue.",
                 errorType = Resource.ErrorType.GENERIC,
                 cause = e
             )
         }
+    }
+
+    /**
+     * Résolution robuste de la chaîne avec stratégie multi-essais :
+     * 1. Requête selon le type déduit.
+     * 2. Si handle échoue ou vide, essai avec/sans '@', puis par username.
+     */
+    private suspend fun fetchChannelInfoWithFallback(
+        queryType: ChannelQueryType,
+        apiKey: String
+    ): Response<YouTubeChannelListResponse> {
+        when (queryType) {
+            is ChannelQueryType.ByChannelId -> {
+                return apiService.getChannelById(channelId = queryType.channelId, apiKey = apiKey)
+            }
+            is ChannelQueryType.ByHandle -> {
+                val cleanHandle = queryType.handle.removePrefix("@")
+                // Essai 1 : handle propre
+                var resp = apiService.getChannelByHandle(handle = cleanHandle, apiKey = apiKey)
+                if (resp.isSuccessful && !resp.body()?.items.isNullOrEmpty()) {
+                    return resp
+                }
+                // Essai 2 : handle avec @
+                resp = apiService.getChannelByHandle(handle = "@$cleanHandle", apiKey = apiKey)
+                if (resp.isSuccessful && !resp.body()?.items.isNullOrEmpty()) {
+                    return resp
+                }
+                // Essai 3 : username legacy
+                resp = apiService.getChannelByUsername(username = cleanHandle, apiKey = apiKey)
+                if (resp.isSuccessful && !resp.body()?.items.isNullOrEmpty()) {
+                    return resp
+                }
+                // Essai 4 : si 24 caractères commençant par UC
+                if (cleanHandle.startsWith("UC") && cleanHandle.length == 24) {
+                    resp = apiService.getChannelById(channelId = cleanHandle, apiKey = apiKey)
+                    if (resp.isSuccessful && !resp.body()?.items.isNullOrEmpty()) {
+                        return resp
+                    }
+                }
+                return resp
+            }
+            is ChannelQueryType.ByUsername -> {
+                var resp = apiService.getChannelByUsername(username = queryType.username, apiKey = apiKey)
+                if (resp.isSuccessful && !resp.body()?.items.isNullOrEmpty()) {
+                    return resp
+                }
+                // Fallback handle
+                resp = apiService.getChannelByHandle(handle = queryType.username, apiKey = apiKey)
+                return resp
+            }
+        }
+    }
+
+    /**
+     * Construit la liste ordonnée et dédupliquée des clés API à tenter.
+     */
+    private suspend fun buildCandidateKeysList(preferredKey: String): List<String> {
+        val candidates = mutableListOf<String>()
+
+        if (preferredKey.isNotBlank()) {
+            candidates.add(preferredKey.trim())
+        }
+
+        try {
+            val defaultKey = apiKeyDao.getDefaultApiKey()
+            if (defaultKey != null && defaultKey.apiKey.isNotBlank()) {
+                candidates.add(defaultKey.apiKey.trim())
+            }
+
+            val allKeys = apiKeyDao.getAllApiKeysList()
+            for (keyEntity in allKeys) {
+                if (keyEntity.apiKey.isNotBlank()) {
+                    candidates.add(keyEntity.apiKey.trim())
+                }
+            }
+        } catch (_: Exception) {
+            // Room access fail-safe
+        }
+
+        // Clé officielle built-in par défaut
+        candidates.add(ApiKeyRepository.DEFAULT_BUILTIN_API_KEY)
+
+        return candidates.distinct().filter { it.isNotBlank() }
+    }
+
+    /**
+     * Recherche dans le cache Room local pour un fallback hors-ligne ou quota épuisé.
+     */
+    private suspend fun findInLocalCache(query: String): DashboardAnalysis? {
+        val cleanQuery = query.trim()
+        val queryType = ChannelQueryParser.parse(cleanQuery)
+
+        val channelEntity = when (queryType) {
+            is ChannelQueryType.ByChannelId -> channelDao.getChannelById(queryType.channelId)
+            is ChannelQueryType.ByHandle -> channelDao.findChannelByQuery(queryType.handle.removePrefix("@"))
+            is ChannelQueryType.ByUsername -> channelDao.findChannelByQuery(queryType.username)
+        } ?: channelDao.findChannelByQuery(cleanQuery)
+
+        return channelEntity?.let { buildDashboardFromCachedEntity(it) }
+    }
+
+    private suspend fun buildDashboardFromCachedEntity(channelEntity: ChannelEntity): DashboardAnalysis {
+        val channelId = channelEntity.channelId
+        val videoEntities = videoDao.getVideosListForChannel(channelId)
+
+        val channel = channelEntity.toDomain()
+        val videos = videoEntities.map { it.toDomain() }
+
+        val top5 = videos.filter { it.isTop5 }.sortedByDescending { it.viewCount }.ifEmpty {
+            videos.sortedByDescending { it.viewCount }.take(5)
+        }.mapIndexed { index, item -> item.copy(rank = index + 1) }
+
+        val mostViewed = videos.firstOrNull { it.isMostViewed }
+            ?: videos.maxByOrNull { it.viewCount }
+
+        val mostCommented = videos.firstOrNull { it.isMostCommented }
+            ?: videos.maxByOrNull { it.commentCount }
+
+        return DashboardAnalysis(
+            channel = channel,
+            top5Videos = top5,
+            mostViewedVideo = mostViewed,
+            mostCommentedVideo = mostCommented,
+            isFromCache = true,
+            analysisTimestamp = channelEntity.cachedAtTimestamp
+        )
+    }
+
+    private suspend fun <T> tryWithRetry(maxAttempts: Int = 2, block: suspend () -> Response<T>): Response<T>? {
+        var attempts = 0
+        while (attempts < maxAttempts) {
+            attempts++
+            try {
+                return block()
+            } catch (e: IOException) {
+                if (attempts >= maxAttempts) return null
+                delay(300)
+            } catch (_: Exception) {
+                return null
+            }
+        }
+        return null
     }
 
     override suspend fun deleteHistoryItem(channelId: String) = withContext(Dispatchers.IO) {
@@ -247,23 +418,6 @@ class YouTubeRepositoryImpl(
         channelDao.clearHistory()
     }
 
-    /**
-     * Effectue la requête Retrofit appropriée selon le type de paramètre identifié.
-     */
-    private suspend fun fetchChannelInfo(
-        queryType: ChannelQueryType,
-        apiKey: String
-    ): Response<com.example.data.remote.model.YouTubeChannelListResponse> {
-        return when (queryType) {
-            is ChannelQueryType.ByChannelId -> apiService.getChannelById(channelId = queryType.channelId, apiKey = apiKey)
-            is ChannelQueryType.ByHandle -> apiService.getChannelByHandle(handle = queryType.handle, apiKey = apiKey)
-            is ChannelQueryType.ByUsername -> apiService.getChannelByUsername(username = queryType.username, apiKey = apiKey)
-        }
-    }
-
-    /**
-     * Convertit la liste des DTOs vidéo en modèles de domaine prêts pour le calcul.
-     */
     private fun mapToVideoItems(dtos: List<YouTubeVideoItemDto>, channelId: String): List<VideoItem> {
         return dtos.map { dto ->
             val snippet = dto.snippet
@@ -285,9 +439,6 @@ class YouTubeRepositoryImpl(
         }
     }
 
-    /**
-     * Sauvegarde la chaîne et l'ensemble de ses vidéos associées dans Room.
-     */
     private suspend fun saveToLocalDatabase(channel: ChannelDetails, videos: List<VideoItem>) {
         val channelEntity = ChannelEntity(
             channelId = channel.channelId,
@@ -325,14 +476,12 @@ class YouTubeRepositoryImpl(
         videoDao.replaceVideosForChannel(channel.channelId, videoEntities)
     }
 
-    /**
-     * Interprète les codes d'erreur HTTP retournés par l'API YouTube Data v3.
-     */
     private fun <T> handleHttpError(code: Int, errorBody: String?): Resource<T> {
         return when (code) {
             403 -> {
                 if (errorBody?.contains("quotaExceeded", ignoreCase = true) == true ||
-                    errorBody?.contains("dailyLimitExceeded", ignoreCase = true) == true
+                    errorBody?.contains("dailyLimitExceeded", ignoreCase = true) == true ||
+                    errorBody?.contains("rateLimitExceeded", ignoreCase = true) == true
                 ) {
                     Resource.Error(
                         message = "Quota journalier YouTube dépassé pour cette clé API.",
@@ -340,7 +489,7 @@ class YouTubeRepositoryImpl(
                     )
                 } else {
                     Resource.Error(
-                        message = "Accès refusé par l'API YouTube. Vérifiez que l'API YouTube Data v3 est bien activée pour cette clé.",
+                        message = "Accès refusé par l'API YouTube (Vérifiez la clé ou les restrictions).",
                         errorType = Resource.ErrorType.INVALID_API_KEY
                     )
                 }

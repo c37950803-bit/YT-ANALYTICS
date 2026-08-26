@@ -28,6 +28,18 @@ interface ApiKeyDao {
     fun getAllApiKeys(): Flow<List<ApiKeyEntity>>
 
     /**
+     * Récupère toutes les clés enregistrées ordonnées avec la clé par défaut en premier (liste directe).
+     */
+    @Query("SELECT * FROM api_keys ORDER BY isDefault DESC, createdAt DESC")
+    suspend fun getAllApiKeysList(): List<ApiKeyEntity>
+
+    /**
+     * Recherche une clé spécifique par sa valeur.
+     */
+    @Query("SELECT * FROM api_keys WHERE apiKey = :key LIMIT 1")
+    suspend fun findByKey(key: String): ApiKeyEntity?
+
+    /**
      * Récupère la clé active par défaut actuelle.
      */
     @Query("SELECT * FROM api_keys WHERE isDefault = 1 LIMIT 1")

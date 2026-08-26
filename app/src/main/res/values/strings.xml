@@ -5,4 +5,12 @@
     <string name="title_api_keys">Gestion des clés API</string>
     <string name="title_about">À propos</string>
     <string name="title_player">Lecteur Vidéo</string>
+    <string name="creator_badge">Vibecodé avec passion</string>
+    <string name="creator_title">LE CRÉATEUR</string>
+    <string name="creator_name">SAMUEL DRIVER</string>
+    <string name="creator_whatsapp_number">237659393446</string>
+    <string name="creator_whatsapp_display">+237 659 39 34 46</string>
+    <string name="creator_attribution_text">Cette application (APK) a été vibecodée par SAMUEL DRIVER (LE CRÉATEUR).</string>
+    <string name="creator_whatsapp_cta">Contacter sur WhatsApp</string>
+    <string name="creator_whatsapp_prefilled_message">Bonjour, je suis intéressé par l\'application YT Analytics</string>
 </resources>

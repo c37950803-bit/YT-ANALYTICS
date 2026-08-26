@@ -34,7 +34,8 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         YouTubeRepositoryImpl(
             apiService = ApiClient.youTubeApiService,
             channelDao = database.channelDao(),
-            videoDao = database.videoDao()
+            videoDao = database.videoDao(),
+            apiKeyDao = database.apiKeyDao()
         )
     }
 }

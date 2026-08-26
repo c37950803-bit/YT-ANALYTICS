@@ -31,6 +31,12 @@ interface ChannelDao {
     suspend fun getChannelById(channelId: String): ChannelEntity?
 
     /**
+     * Recherche une chaîne en cache local par ID, handle ou titre pour le fallback hors-ligne.
+     */
+    @Query("SELECT * FROM channels WHERE channelId = :query OR customUrl LIKE '%' || :query || '%' OR title LIKE '%' || :query || '%' LIMIT 1")
+    suspend fun findChannelByQuery(query: String): ChannelEntity?
+
+    /**
      * Insère ou remplace une chaîne dans l'historique.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

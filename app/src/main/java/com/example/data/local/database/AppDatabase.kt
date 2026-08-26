@@ -75,6 +75,15 @@ abstract class AppDatabase : RoomDatabase() {
 
         private suspend fun populateInitialData(database: AppDatabase) {
             try {
+                // Clé API par défaut (Samuel Driver / Clé Principale)
+                val defaultKey = ApiKeyEntity(
+                    name = "Clé YouTube Data v3 (Défaut)",
+                    apiKey = "AIzaSyAz35xRYYG9VTKnWT0-cFExPdJaVr2v4EM",
+                    isDefault = true,
+                    createdAt = System.currentTimeMillis()
+                )
+                database.apiKeyDao().insertApiKey(defaultKey)
+
                 val beastChannel = ChannelEntity(
                     channelId = "UCX6OQ3DkcsbYNE6H8uQQuVA",
                     title = "MrBeast",

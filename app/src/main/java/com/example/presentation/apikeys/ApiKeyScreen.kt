@@ -55,7 +55,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.FilledTonalButton
 import com.example.domain.model.ApiKey
+import com.example.presentation.about.AboutCreatorDialog
 import com.example.presentation.common.AddEditApiKeyDialog
 import com.example.presentation.common.ConfirmDeleteDialog
 import com.example.ui.theme.AccentGreen
@@ -77,8 +81,13 @@ fun ApiKeyScreen(
     var keyList by remember { mutableStateOf<List<ApiKey>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var showAddEditDialog by remember { mutableStateOf(false) }
+    var showCreatorDialog by remember { mutableStateOf(false) }
     var editingKey by remember { mutableStateOf<ApiKey?>(null) }
     var keyToDelete by remember { mutableStateOf<ApiKey?>(null) }
+
+    if (showCreatorDialog) {
+        AboutCreatorDialog(onDismiss = { showCreatorDialog = false })
+    }
 
     // Implémentation du contrat ApiKeyContract.View
     val apiKeyView = remember {
@@ -152,10 +161,15 @@ fun ApiKeyScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             // Bannière explicative Quotas & Guide
-            ApiKeyGuideHeader(onAddKeyClick = {
-                editingKey = null
-                showAddEditDialog = true
-            })
+            ApiKeyGuideHeader(
+                onAddKeyClick = {
+                    editingKey = null
+                    showAddEditDialog = true
+                },
+                onShowCreatorClick = {
+                    showCreatorDialog = true
+                }
+            )
 
             // Liste des clés configurées
             if (isLoading && keyList.isEmpty()) {
@@ -238,7 +252,10 @@ fun ApiKeyScreen(
 }
 
 @Composable
-private fun ApiKeyGuideHeader(onAddKeyClick: () -> Unit) {
+private fun ApiKeyGuideHeader(
+    onAddKeyClick: () -> Unit,
+    onShowCreatorClick: () -> Unit
+) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -267,7 +284,7 @@ private fun ApiKeyGuideHeader(onAddKeyClick: () -> Unit) {
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Clé API YouTube Data v3",
                         style = MaterialTheme.typography.titleMedium,
@@ -288,6 +305,72 @@ private fun ApiKeyGuideHeader(onAddKeyClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Bouton vers la fiche Développeur / Créateur SAMUEL DRIVER
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "SAMUEL DRIVER (LE CRÉATEUR)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Besoin d'aide ou d'une clé ? Contactez via WhatsApp",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    FilledTonalButton(
+                        onClick = onShowCreatorClick,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.testTag("btn_api_key_creator")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = "WhatsApp",
+                            modifier = Modifier.size(14.dp),
+                            tint = Color(0xFF25D366)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "WhatsApp",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }

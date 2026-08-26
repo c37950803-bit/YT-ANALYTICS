@@ -1,7 +1,11 @@
 package com.example.presentation.navigation
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,16 +20,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -53,11 +62,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.di.AppContainer
+import java.net.URLEncoder
+import com.example.presentation.about.AboutCreatorDialog
 import com.example.presentation.about.AboutScreen
 import com.example.presentation.apikeys.ApiKeyPresenter
 import com.example.presentation.apikeys.ApiKeyScreen
@@ -187,6 +199,11 @@ fun MainAppScaffold(
                         scope.launch { drawerState.close() }
                     }
                 )
+
+                Spacer(modifier = Modifier.weight(1f, fill = true))
+
+                // Footer Créateur / WhatsApp
+                DrawerCreatorFooter()
             }
         },
         modifier = modifier
@@ -427,5 +444,83 @@ private fun DrawerNavItem(
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .testTag(testTag)
     )
+}
+
+@Composable
+private fun DrawerCreatorFooter() {
+    val context = LocalContext.current
+    val rawPhoneNumber = "237659393446"
+    val formattedPhoneNumber = "+237 659 39 34 46"
+    val developerName = "SAMUEL DRIVER"
+    val prefilledMessage = "Bonjour, je suis intéressé par l'application YT Analytics"
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (showDialog) {
+        AboutCreatorDialog(onDismiss = { showDialog = false })
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 16.dp)
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.padding(bottom = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            ),
+            border = CardDefaults.outlinedCardBorder().copy(
+                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    showDialog = true
+                }
+                .testTag("drawer_creator_card")
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF25D366),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = "WhatsApp",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Vibecodé par $developerName",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "LE CRÉATEUR ($formattedPhoneNumber)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
 }
 
