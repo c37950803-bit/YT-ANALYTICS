@@ -46,6 +46,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,14 +66,22 @@ import com.example.ui.theme.AccentBlue
 import com.example.ui.theme.AccentGreen
 import java.net.URLEncoder
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-
 /**
- * Écran "À propos" de l'application.
- * Stylisé avec le thème "Professional Polish" et attribution du Créateur SAMUEL DRIVER.
+ * =========================================================================================
+ * ℹ️ ÉCRAN À PROPOS & DOCUMENTATION TECHNIQUE : AboutScreen.kt
+ * =========================================================================================
+ * 
+ * 💡 EXPLICATION POUR GRAND DÉBUTANT :
+ * 
+ * 1. QUEL EST LE RÔLE DE CET ÉCRAN ?
+ *    - Il présente les informations officielles de l'application.
+ *    - Il met en avant l'auteur : **SAMUEL DRIVER** (Le Créateur & Vibecodeur).
+ *    - Il propose un contact WhatsApp en 1 clic vers le (+237 659 39 34 46).
+ * 
+ * 2. QUELLES SONT LES EXPLICATIONS PÉDAGOGIQUES FOURNIES ?
+ *    - Les choix d'architecture (MVP, Room SQLite, Retrofit, Coroutines).
+ *    - L'économie des quotas YouTube (pourquoi l'appli ne consomme presque rien).
+ *    - Un tutoriel pas-à-pas pour créer sa propre clé API Google Cloud Console.
  */
 @Composable
 fun AboutScreen(
@@ -94,15 +106,17 @@ fun AboutScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // CARTE DU CRÉATEUR & VIBECODE
+        // =========================================================================
+        // 🌟 1. CARTE DU CRÉATEUR & VIBECODE (SAMUEL DRIVER)
+        // =========================================================================
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 modifier = Modifier
@@ -168,7 +182,7 @@ fun AboutScreen(
                     // Contact WhatsApp
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         border = CardDefaults.outlinedCardBorder(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -297,7 +311,9 @@ fun AboutScreen(
             }
         }
 
-        // En-tête de l'application
+        // =========================================================================
+        // 📊 2. EN-TÊTE DE L'APPLICATION
+        // =========================================================================
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -314,15 +330,15 @@ fun AboutScreen(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.size(56.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Analytics,
                                 contentDescription = "Logo",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(32.dp)
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                     }
@@ -354,7 +370,9 @@ fun AboutScreen(
             }
         }
 
-        // Architecture & Stack Technique
+        // =========================================================================
+        // 🏗️ 3. ARCHITECTURE & STACK TECHNIQUE
+        // =========================================================================
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -409,7 +427,9 @@ fun AboutScreen(
             }
         }
 
-        // Gestion et Économie des Quotas API
+        // =========================================================================
+        // ⚡ 4. GESTION ET ÉCONOMIE DES QUOTAS API
+        // =========================================================================
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -468,7 +488,9 @@ fun AboutScreen(
             }
         }
 
-        // Guide d'obtention de clé
+        // =========================================================================
+        // 🔑 5. GUIDE D'OBTENTION DE CLÉ API
+        // =========================================================================
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -519,7 +541,7 @@ private fun TechItem(
     ) {
         Surface(
             shape = RoundedCornerShape(8.dp),
-            color = iconColor.copy(alpha = 0.15f),
+            color = iconColor.copy(alpha = 0.12f),
             modifier = Modifier.size(30.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -557,11 +579,11 @@ private fun QuotaItem(
             )
             Surface(
                 shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Text(
                     text = cost,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -575,4 +597,5 @@ private fun QuotaItem(
         )
     }
 }
+
 

@@ -73,12 +73,35 @@ import coil.compose.AsyncImage
 import com.example.domain.model.ChannelDetails
 import com.example.presentation.common.ConfirmDeleteDialog
 import com.example.presentation.common.QuotaFallbackDialog
-import com.example.ui.theme.PurplePrimary
+import com.example.ui.theme.AccentGreenActive
+import com.example.ui.theme.MinimalistBorderLight
+import com.example.ui.theme.YouTubeRed
 import com.example.util.NumberFormatUtils
 
 /**
- * Écran d'accueil de l'application (Vue MVP).
- * Stylisé selon le thème "Professional Polish".
+ * =========================================================================================
+ * 🏠 ÉCRAN D'ACCUEIL : HomeScreen.kt (Vue MVP - Jetpack Compose)
+ * =========================================================================================
+ * 
+ * 💡 EXPLICATION POUR QUASI-DÉBUTANT (Aucune connaissance en code requise) :
+ * 
+ * 1. QU'EST-CE QUE CET ÉCRAN FAIT ?
+ *    - C'est la porte d'entrée de l'application.
+ *    - L'utilisateur peut y taper le nom ou le lien d'une chaîne YouTube (ex: "@MrBeast").
+ *    - Il affiche aussi l'historique des chaînes déjà consultées, enregistrées directement
+ *      sur le téléphone dans une base de données locale (Room / SQLite) pour économiser
+ *      la connexion Internet et les quotas de l'API.
+ * 
+ * 2. C'EST QUOI LE PATTERN "MVP" (Modèle-Vue-Presenter) ?
+ *    - La "VUE" (ce fichier HomeScreen) s'occupe UNIQUEMENT du dessin sur l'écran (boutons, textes, couleurs).
+ *    - Le "PRESENTER" (HomePresenter) s'occupe de la réflexion et des calculs (parler à la base de données,
+ *      déclencher la recherche, gérer les erreurs).
+ *    - Ainsi, le code reste propre, facile à comprendre et sans mélange désordonné !
+ * 
+ * 3. C'EST QUOI UN "STATE" (ex: `remember { mutableStateOf(...) }`) ?
+ *    - En Jetpack Compose, un "State" est une variable magique. Dès que sa valeur change,
+ *      l'écran se redessine automatiquement à l'endroit concerné, sans qu'on ait besoin de
+ *      recharger toute la page !
  */
 @Composable
 fun HomeScreen(
@@ -87,31 +110,53 @@ fun HomeScreen(
     onNavigateToApiKeys: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // -------------------------------------------------------------------------------------
+    // VARIABLES D'ÉTAT (State) : Elles gardent la mémoire des données affichées à l'écran
+    // -------------------------------------------------------------------------------------
+    // Liste des chaînes enregistrées dans l'historique local du téléphone
     var historyList by remember { mutableStateOf<List<ChannelDetails>>(emptyList()) }
+    
+    // Indique si l'application est en train de chercher ou charger des données (affiche un sablier/rond de chargement)
     var isLoading by remember { mutableStateOf(false) }
+    
+    // Message d'erreur éventuel à montrer à l'utilisateur
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    // Contrôle l'ouverture d'une fenêtre d'alerte si le quota YouTube de la clé est dépassé
     var showQuotaFallback by remember { mutableStateOf(false) }
     var quotaErrorMessage by remember { mutableStateOf("") }
+    
+    // Texte actuellement saisi par l'utilisateur dans la barre de recherche
     var searchQuery by remember { mutableStateOf("") }
+    
+    // Identifiant de la chaîne que l'utilisateur souhaite supprimer de son historique
     var channelToDelete by remember { mutableStateOf<String?>(null) }
+    
+    // Contrôle la popup de confirmation pour tout effacer d'un coup
     var showClearAllConfirmation by remember { mutableStateOf(false) }
 
-    // Implémentation du contrat HomeContract.View via le cycle de vie Compose
+    // -------------------------------------------------------------------------------------
+    // INTERFACE DE COMMUNICATION : Le Presenter appelle ces méthodes pour donner des ordres à la Vue
+    // -------------------------------------------------------------------------------------
     val homeView = remember {
         object : HomeContract.View {
             override fun displayHistory(history: List<ChannelDetails>) {
+                // Met à jour la liste des chaînes affichées
                 historyList = history
             }
 
             override fun showEmptyHistory() {
+                // Vide la liste si la base locale est vide
                 historyList = emptyList()
             }
 
             override fun navigateToDashboard(channelId: String) {
+                // Change d'écran vers le tableau de bord de statistiques
                 onNavigateToDashboard(channelId)
             }
 
             override fun showApiKeyRequiredDialog() {
+                // Redirige vers la gestion des clés si aucune clé n'est configurée
                 onNavigateToApiKeys()
             }
 
@@ -130,6 +175,7 @@ fun HomeScreen(
         }
     }
 
+    // Lie le Presenter à la Vue quand l'écran s'ouvre, et le déconnecte quand l'écran se ferme
     DisposableEffect(presenter) {
         presenter.attachView(homeView)
         onDispose {
@@ -137,16 +183,19 @@ fun HomeScreen(
         }
     }
 
+    // -------------------------------------------------------------------------------------
+    // MISE EN PAGE VISUELLE (Design Minimaliste Épuré)
+    // -------------------------------------------------------------------------------------
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // En-tête Hero YouTube Analytics
-        HomeHeroHeader()
+        // En-tête minimaliste avec logo rouge YouTube & titre épuré
+        HomeMinimalistHeader()
 
-        // Section de recherche
-        SearchSection(
+        // Section de saisie et de recherche
+        SearchMinimalistSection(
             query = searchQuery,
             onQueryChange = { searchQuery = it },
             onSearch = {
@@ -157,7 +206,7 @@ fun HomeScreen(
             onClear = { searchQuery = "" }
         )
 
-        // Section Historique ("LocalStorage") avec barre d'actions
+        // En-tête de l'historique local avec compteur et boutons d'actions
         HistoryHeader(
             historyCount = historyList.size,
             isLoading = isLoading,
@@ -169,14 +218,9 @@ fun HomeScreen(
             }
         )
 
-        // Contenu principal de l'historique
+        // Affichage du contenu : Soit une vue vide élégante, soit la liste des cartes
         if (historyList.isEmpty()) {
-            EmptyHistoryView(
-                onSelectSuggestion = { suggestion ->
-                    searchQuery = suggestion
-                    presenter.onSearchSubmitted(suggestion)
-                }
-            )
+            EmptyHistoryView()
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -203,7 +247,9 @@ fun HomeScreen(
         }
     }
 
-    // Dialogue de confirmation de suppression d'une seule chaîne
+    // -------------------------------------------------------------------------------------
+    // BOÎTES DE DIALOGUES (Popups de confirmation)
+    // -------------------------------------------------------------------------------------
     if (channelToDelete != null) {
         ConfirmDeleteDialog(
             title = "Supprimer de l'historique",
@@ -216,7 +262,6 @@ fun HomeScreen(
         )
     }
 
-    // Dialogue de confirmation pour vider l'historique complet
     if (showClearAllConfirmation) {
         ConfirmDeleteDialog(
             title = "Vider l'historique",
@@ -229,7 +274,6 @@ fun HomeScreen(
         )
     }
 
-    // Dialogue de fallback Quota
     if (showQuotaFallback) {
         QuotaFallbackDialog(
             errorMessage = quotaErrorMessage,
@@ -242,40 +286,45 @@ fun HomeScreen(
     }
 }
 
+/**
+ * 🌟 EN-TÊTE MINIMALISTE (HomeMinimalistHeader)
+ * Un bandeau sobre, épuré avec typographie équilibrée et icône YouTube nette.
+ */
 @Composable
-private fun HomeHeroHeader() {
+private fun HomeMinimalistHeader() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Petit badge rouge YouTube minimaliste
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(48.dp)
+                shape = RoundedCornerShape(14.dp),
+                color = YouTubeRed,
+                modifier = Modifier.size(44.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Analytics,
-                        contentDescription = "Logo",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(26.dp)
+                        contentDescription = "Logo YouTube Analytics",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column {
                 Text(
-                    text = "YouTube Channel Analytics",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "YouTube Analytics",
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Analyse de chaînes & Top 5 Vidéos (MVP)",
+                    text = "Analyse de chaînes & Top 5 Vidéos",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -284,15 +333,19 @@ private fun HomeHeroHeader() {
     }
 }
 
+/**
+ * 🔍 BARRE DE RECHERCHE MINIMALISTE (SearchMinimalistSection)
+ * Champ texte arrondi avec suggestions en bulles compactes et bouton d'action net.
+ */
 @Composable
-private fun SearchSection(
+private fun SearchMinimalistSection(
     query: String,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onClear: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -314,20 +367,22 @@ private fun SearchSection(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Champ de saisie utilisateur
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 placeholder = {
                     Text(
                         "URL, @Handle (ex: @MrBeast), ou ID",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Rechercher",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
                 trailingIcon = {
@@ -340,7 +395,7 @@ private fun SearchSection(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
@@ -357,36 +412,24 @@ private fun SearchSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Suggestions d'exemples rapides
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                Text(
+                    text = "Astuce : Compatible avec les liens complets, @handles et ID de chaînes",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
                     modifier = Modifier.weight(1f)
-                ) {
-                    val suggestions = listOf("@MrBeast", "@mkbhd", "@OpenAI", "@Veritasium")
-                    items(suggestions) { tag ->
-                        SuggestionChip(
-                            onClick = {
-                                onQueryChange(tag)
-                            },
-                            label = {
-                                Text(tag, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            border = null,
-                            modifier = Modifier.height(30.dp)
-                        )
-                    }
-                }
+                )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
+                // Bouton principal d'analyse
                 Button(
                     onClick = onSearch,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
                     modifier = Modifier.testTag("btn_submit_search")
                 ) {
                     Text("Analyser", fontWeight = FontWeight.Bold)
@@ -396,6 +439,9 @@ private fun SearchSection(
     }
 }
 
+/**
+ * 📋 EN-TÊTE DE LA SECTION HISTORIQUE
+ */
 @Composable
 private fun HistoryHeader(
     historyCount: Int,
@@ -414,8 +460,8 @@ private fun HistoryHeader(
             Icon(
                 imageVector = Icons.Default.History,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -426,7 +472,7 @@ private fun HistoryHeader(
             if (isLoading) {
                 Spacer(modifier = Modifier.width(8.dp))
                 CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(14.dp),
                     strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -461,6 +507,10 @@ private fun HistoryHeader(
     }
 }
 
+/**
+ * 📇 CARTE D'UNE CHAÎNE DANS L'HISTORIQUE (ChannelHistoryCard)
+ * Style minimaliste : bordure fine, photo de profil arrondie, compteurs compacts.
+ */
 @Composable
 private fun ChannelHistoryCard(
     channel: ChannelDetails,
@@ -468,7 +518,7 @@ private fun ChannelHistoryCard(
     onDelete: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -484,17 +534,17 @@ private fun ChannelHistoryCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Miniature / Avatar de la chaîne
+            // Photo de profil de la chaîne YouTube
             AsyncImage(
                 model = channel.thumbnailUrl,
                 contentDescription = "Avatar ${channel.title}",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
 
@@ -513,7 +563,7 @@ private fun ChannelHistoryCard(
                     Text(
                         text = channel.customUrl,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -524,13 +574,13 @@ private fun ChannelHistoryCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Abonnés
+                    // Nombre d'abonnés
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.Subscriptions,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
@@ -540,13 +590,13 @@ private fun ChannelHistoryCard(
                         )
                     }
 
-                    // Vues
+                    // Total des vues
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.Visibility,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
@@ -569,18 +619,21 @@ private fun ChannelHistoryCard(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Supprimer de l'historique",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.size(20.dp)
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
 }
 
+/**
+ * 📭 ÉTAT VIDE (EmptyHistoryView)
+ * S'affiche quand l'utilisateur vient d'installer l'application et n'a pas encore de chaînes enregistrées.
+ * Offre un design 100% propre, sobre et minimaliste.
+ */
 @Composable
-private fun EmptyHistoryView(
-    onSelectSuggestion: (String) -> Unit
-) {
+private fun EmptyHistoryView() {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -594,14 +647,14 @@ private fun EmptyHistoryView(
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(72.dp)
+                modifier = Modifier.size(64.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(36.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             }
@@ -609,7 +662,7 @@ private fun EmptyHistoryView(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Aucune chaîne dans l'historique",
+                text = "Historique vierge",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -618,35 +671,15 @@ private fun EmptyHistoryView(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Recherchez une chaîne YouTube ci-dessus ou cliquez sur une suggestion pour lancer votre première analyse.",
+                text = "Entrez l'URL, le @handle ou l'identifiant d'une chaîne ci-dessus pour lancer votre première analyse.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                modifier = Modifier.padding(horizontal = 24.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 18.sp
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { onSelectSuggestion("@MrBeast") },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                ) {
-                    Text("Essayer @MrBeast", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                }
-
-                Button(
-                    onClick = { onSelectSuggestion("@mkbhd") },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                ) {
-                    Text("Essayer @mkbhd", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                }
-            }
         }
     }
 }
+
 

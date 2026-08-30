@@ -44,6 +44,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +58,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
+import com.example.ui.theme.YouTubeRed
+import com.example.ui.theme.AccentGreen
+import com.example.ui.theme.AccentAmber
+import com.example.ui.theme.AccentBlue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -88,8 +95,26 @@ import com.example.ui.theme.PurplePrimaryContainer
 import com.example.util.NumberFormatUtils
 
 /**
- * Écran du Tableau de Bord (Dashboard) d'analyse de chaîne YouTube (Vue MVP).
- * Stylisé selon le thème "Professional Polish" avec cartes Material 3 arrondies et typographie soignée.
+ * =========================================================================================
+ * 📊 TABLEAU DE BORD D'ANALYSE : DashboardScreen.kt (Vue MVP - Jetpack Compose)
+ * =========================================================================================
+ * 
+ * 💡 EXPLICATION GRAND DÉBUTANT (Comment fonctionne cet écran ?) :
+ * 
+ * 1. QUEL EST LE RÔLE DE CET ÉCRAN ?
+ *    - Cet écran affiche la "fiche d'identité complète" d'une chaîne YouTube :
+ *      son avatar, sa description, sa date de création, ses totaux d'abonnés/vues/vidéos.
+ *    - Il met en valeur les 2 grandes vidéos championnes (la plus vue et la plus commentée).
+ *    - Il propose un filtre interactif pour classer le Top 5 des vidéos selon 3 critères :
+ *      1. 🔥 Plus vues
+ *      2. 💬 Plus commentées
+ *      3. ⏱️ Plus longues (grâce à l'analyse de la durée ISO-8601 ex: "PT1H20M")
+ *    - Cliquer sur une vidéo ouvre directement le lecteur vidéo officiel YouTube intégré !
+ * 
+ * 2. COMMENT FONCTIONNE LE CACHE HORS-LIGNE (0 QUOTA) ?
+ *    - Lorsque l'utilisateur consulte une chaîne déjà dans l'historique, les données sont
+ *      instantanément chargées depuis le stockage local SQLite du smartphone.
+ *    - Le bouton "Rafraîchir" force un appel réseau uniquement si l'utilisateur le demande.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,13 +127,15 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    
+    // Variables d'état : contiennent les données reçues depuis l'API YouTube
     var analysisData by remember { mutableStateOf<DashboardAnalysis?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showQuotaFallback by remember { mutableStateOf(false) }
     var quotaErrorMessage by remember { mutableStateOf("") }
 
-    // Implémentation du contrat DashboardContract.View
+    // Implémentation du contrat DashboardContract.View (commandes reçues du Presenter)
     val dashboardView = remember {
         object : DashboardContract.View {
             override fun displayDashboard(analysis: DashboardAnalysis) {
@@ -261,6 +288,16 @@ fun DashboardScreen(
     }
 }
 
+enum class Top5RankingType(
+    val title: String,
+    val subtitle: String,
+    val chipLabel: String
+) {
+    VIEWS("TOP 5 VIDÉOS", "Classées par nombre total de vues", "🔥 Plus vues"),
+    COMMENTS("TOP 5 VIDÉOS", "Classées par nombre de commentaires", "💬 Plus commentées"),
+    LONGEST("TOP 5 VIDÉOS", "Classées par durée de la vidéo", "⏱️ Plus longues")
+}
+
 @Composable
 private fun DashboardContentView(
     analysis: DashboardAnalysis,
@@ -268,6 +305,13 @@ private fun DashboardContentView(
     onExternalPlay: (VideoItem) -> Unit
 ) {
     var isDescriptionExpanded by remember { mutableStateOf(false) }
+    var selectedTop5Type by remember { mutableStateOf(Top5RankingType.VIEWS) }
+
+    val displayedVideos = when (selectedTop5Type) {
+        Top5RankingType.VIEWS -> analysis.top5Videos
+        Top5RankingType.COMMENTS -> analysis.top5MostCommentedVideos.ifEmpty { analysis.top5Videos }
+        Top5RankingType.LONGEST -> analysis.top5LongestVideos.ifEmpty { analysis.top5Videos }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -302,32 +346,66 @@ private fun DashboardContentView(
         }
 
         // ==========================================
-        // BLOC 3 : Top 5 des Vidéos les plus vues
+        // BLOC 3 : Sélecteur et Liste Top 5 (Vues / Commentaires / Plus Longues)
         // ==========================================
         item {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp, start = 4.dp, end = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 4.dp)
             ) {
-                Text(
-                    text = "TOP 5 VIDÉOS",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    letterSpacing = 0.8.sp
-                )
-                Text(
-                    text = "Par total de vues",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = selectedTop5Type.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        text = selectedTop5Type.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sélecteur dynamique de classement
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Top5RankingType.values().forEach { rankingType ->
+                        val isSelected = selectedTop5Type == rankingType
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedTop5Type = rankingType },
+                            label = {
+                                Text(
+                                    text = rankingType.chipLabel,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
             }
         }
 
-        if (analysis.top5Videos.isEmpty()) {
+        if (displayedVideos.isEmpty()) {
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -348,11 +426,12 @@ private fun DashboardContentView(
             }
         } else {
             items(
-                items = analysis.top5Videos,
-                key = { it.videoId }
+                items = displayedVideos,
+                key = { "${selectedTop5Type.name}_${it.videoId}" }
             ) { video ->
                 PolishTop5VideoCard(
                     video = video,
+                    rankingType = selectedTop5Type,
                     onPlay = { onPlayVideo(video) },
                     onExternal = { onExternalPlay(video) }
                 )
@@ -556,9 +635,12 @@ private fun PolishChannelHeaderCard(
 }
 
 /**
- * Section "Les Deux Champions" stylisée avec 2 cartes colorées et distinctives
- * Card 1: Container #eaddff avec texte #21005d et bouton play #21005d
- * Card 2: Container #f3edf7 avec texte #49454f et bouton comment #6750a4
+ * 🏆 SECTION "LES DEUX CHAMPIONS" (PolishChampionsSection)
+ * 
+ * 💡 EXPLICATION DÉBUTANT :
+ * Cette section extrait automatiquement deux records majeurs de la chaîne :
+ * 1. Le Record absolu de vues (La vidéo la plus populaire)
+ * 2. Le Record de commentaires (La vidéo qui a suscité le plus d'engagement)
  */
 @Composable
 private fun PolishChampionsSection(
@@ -571,10 +653,14 @@ private fun PolishChampionsSection(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // 🥇 Champion #1 : Record de vues
         if (mostViewed != null) {
             Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onPlay(mostViewed) }
@@ -585,20 +671,39 @@ private fun PolishChampionsSection(
                         .height(130.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "RECORD DE VUES",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = YouTubeRed.copy(alpha = 0.12f),
+                            modifier = Modifier.size(18.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Whatshot,
+                                    contentDescription = null,
+                                    tint = YouTubeRed,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "RECORD VUES",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.6.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     Column {
                         Text(
                             text = NumberFormatUtils.formatCompactNumber(mostViewed.viewCount),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = mostViewed.title,
@@ -615,7 +720,7 @@ private fun PolishChampionsSection(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = YouTubeRed,
                             modifier = Modifier.size(28.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -632,10 +737,14 @@ private fun PolishChampionsSection(
             }
         }
 
+        // 💬 Champion #2 : Record de commentaires
         if (mostCommented != null) {
             Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onPlay(mostCommented) }
@@ -646,19 +755,38 @@ private fun PolishChampionsSection(
                         .height(130.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "PLUS COMMENTÉE",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            modifier = Modifier.size(18.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Comment,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "PLUS COMMENTÉE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.6.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     Column {
                         Text(
                             text = NumberFormatUtils.formatCompactNumber(mostCommented.commentCount),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
@@ -681,10 +809,10 @@ private fun PolishChampionsSection(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Comment,
+                                    imageVector = Icons.Default.PlayArrow,
                                     contentDescription = "Lire",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
@@ -696,17 +824,21 @@ private fun PolishChampionsSection(
 }
 
 /**
- * Carte de vidéo du Top 5 selon le style "Professional Polish"
- * Fond blanc, bordure #e7e0ec, miniature arrondie, typographie soignée et flèche/action en #6750a4.
+ * 🎬 CARTE VIDÉO DU TOP 5 (PolishTop5VideoCard)
+ * 
+ * 💡 EXPLICATION DÉBUTANT :
+ * Représente chaque vidéo du Top 5 avec son badge de rang (#1, #2, #3, #4, #5),
+ * sa miniature 16:9, sa durée formatée (ex: "12:45"), son titre, et ses statistiques.
  */
 @Composable
 private fun PolishTop5VideoCard(
     video: VideoItem,
+    rankingType: Top5RankingType = Top5RankingType.VIEWS,
     onPlay: () -> Unit,
     onExternal: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
@@ -727,11 +859,11 @@ private fun PolishTop5VideoCard(
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = when (video.rank) {
-                    1 -> MaterialTheme.colorScheme.primaryContainer
-                    2 -> MaterialTheme.colorScheme.secondaryContainer
+                    1 -> YouTubeRed
+                    2 -> MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.surfaceVariant
                 },
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
@@ -739,8 +871,8 @@ private fun PolishTop5VideoCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = when (video.rank) {
-                            1 -> MaterialTheme.colorScheme.onPrimaryContainer
-                            2 -> MaterialTheme.colorScheme.onSecondaryContainer
+                            1 -> Color.White
+                            2 -> MaterialTheme.colorScheme.onPrimary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
@@ -749,16 +881,38 @@ private fun PolishTop5VideoCard(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Miniature
-            AsyncImage(
-                model = video.thumbnailUrl,
-                contentDescription = "Miniature ${video.title}",
-                contentScale = ContentScale.Crop,
+            // Miniature avec badge durée incrusté
+            Box(
                 modifier = Modifier
-                    .size(width = 80.dp, height = 50.dp)
+                    .size(width = 84.dp, height = 52.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+            ) {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = "Miniature ${video.title}",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                if (!video.durationIso.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color.Black.copy(alpha = 0.80f),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(3.dp)
+                    ) {
+                        Text(
+                            text = video.formattedDuration,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -772,13 +926,48 @@ private fun PolishTop5VideoCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
-                Text(
-                    text = "${NumberFormatUtils.formatCompactNumber(video.viewCount)} vues • ${NumberFormatUtils.formatIsoDate(video.publishedAt)}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                when (rankingType) {
+                    Top5RankingType.VIEWS -> {
+                        Text(
+                            text = "${NumberFormatUtils.formatCompactNumber(video.viewCount)} vues • ${NumberFormatUtils.formatIsoDate(video.publishedAt)}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = YouTubeRed
+                        )
+                    }
+                    Top5RankingType.COMMENTS -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${NumberFormatUtils.formatCompactNumber(video.commentCount)} commentaires",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = " • ${NumberFormatUtils.formatCompactNumber(video.viewCount)} vues",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Top5RankingType.LONGEST -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "⏱️ ${video.formattedDuration}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = " • ${NumberFormatUtils.formatCompactNumber(video.viewCount)} vues",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(6.dp))
@@ -788,9 +977,9 @@ private fun PolishTop5VideoCard(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Lire la vidéo",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = YouTubeRed,
                     modifier = Modifier.size(22.dp)
                 )
             }

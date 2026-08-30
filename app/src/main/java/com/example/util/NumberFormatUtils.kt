@@ -66,4 +66,50 @@ object NumberFormatUtils {
         if (key.length <= 8) return "••••••••"
         return "${key.take(6)}••••••••${key.takeLast(4)}"
     }
+
+    /**
+     * Convertit une durée ISO-8601 (ex: "PT1H23M45S", "PT15M30S", "PT45S") en secondes.
+     */
+    fun parseIsoDurationToSeconds(durationIso: String?): Long {
+        if (durationIso.isNullOrBlank()) return 0L
+        return try {
+            val regex = Regex("P(?:(\\d+)D)?T?(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?")
+            val match = regex.matchEntire(durationIso.trim())
+            if (match != null) {
+                val days = match.groupValues[1].toLongOrNull() ?: 0L
+                val hours = match.groupValues[2].toLongOrNull() ?: 0L
+                val minutes = match.groupValues[3].toLongOrNull() ?: 0L
+                val seconds = match.groupValues[4].toLongOrNull() ?: 0L
+                days * 86400 + hours * 3600 + minutes * 60 + seconds
+            } else {
+                java.time.Duration.parse(durationIso).seconds
+            }
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    /**
+     * Formate un nombre de secondes en texte lisible (ex: "1h 23m 45s", "15m 30s", "45s").
+     */
+    fun formatDurationSeconds(totalSeconds: Long): String {
+        if (totalSeconds <= 0) return "0s"
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+
+        return when {
+            hours > 0 -> String.format(Locale.US, "%dh %02dm %02ds", hours, minutes, seconds)
+            minutes > 0 -> String.format(Locale.US, "%dm %02ds", minutes, seconds)
+            else -> String.format(Locale.US, "%ds", seconds)
+        }
+    }
+
+    /**
+     * Formate directement une durée ISO-8601 de YouTube.
+     */
+    fun formatIsoDuration(durationIso: String?): String {
+        val seconds = parseIsoDurationToSeconds(durationIso)
+        return if (seconds > 0) formatDurationSeconds(seconds) else "Durée n/d"
+    }
 }

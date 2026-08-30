@@ -63,12 +63,30 @@ import com.example.presentation.about.AboutCreatorDialog
 import com.example.presentation.common.AddEditApiKeyDialog
 import com.example.presentation.common.ConfirmDeleteDialog
 import com.example.ui.theme.AccentGreen
+import com.example.ui.theme.YouTubeRed
 import com.example.util.NumberFormatUtils
 import kotlinx.coroutines.launch
 
 /**
- * Écran de Gestion des Clés API YouTube (Vue MVP).
- * Stylisé avec le thème "Professional Polish".
+ * =========================================================================================
+ * 🔑 GESTIONNAIRE DES CLÉS API : ApiKeyScreen.kt (Design Minimaliste & Épuré)
+ * =========================================================================================
+ * 
+ * 💡 EXPLICATION GRAND DÉBUTANT (À quoi sert cet écran et comment fonctionne-t-il ?) :
+ * 
+ * 1. C'EST QUOI UNE CLÉ API YOUTUBE (API Key) ?
+ *    - C'est comme un "passeport" ou un "mot de passe" officiel fourni par Google Cloud.
+ *    - Quand l'application veut demander à YouTube : "Combien d'abonnés a cette chaîne ?",
+ *      YouTube exige de voir ce passeport pour autoriser l'accès.
+ *    - Google accorde gratuitement 10 000 "unités de quota" par jour et par clé.
+ * 
+ * 2. POURQUOI POUVOIR ENREGISTRER PLUSIEURS CLÉS ?
+ *    - Si vous analysez beaucoup de chaînes et que votre clé arrive à 0 crédit (erreur 403),
+ *      l'application vous permet de basculer instantanément sur une 2ème ou 3ème clé de secours !
+ * 
+ * 3. OÙ SONT STOCKÉES LES CLÉS ?
+ *    - 100% sur votre téléphone dans la base locale SQLite (Room).
+ *    - Elles ne sont JAMAIS envoyées sur un serveur externe obscur : la sécurité est totale.
  */
 @Composable
 fun ApiKeyScreen(
@@ -78,6 +96,7 @@ fun ApiKeyScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // Liste des clés observée par Compose pour rafraîchir l'écran en direct
     var keyList by remember { mutableStateOf<List<ApiKey>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var showAddEditDialog by remember { mutableStateOf(false) }
@@ -85,11 +104,14 @@ fun ApiKeyScreen(
     var editingKey by remember { mutableStateOf<ApiKey?>(null) }
     var keyToDelete by remember { mutableStateOf<ApiKey?>(null) }
 
+    // Dialogue du créateur (avec Easter Egg pour révéler la clé)
     if (showCreatorDialog) {
         AboutCreatorDialog(onDismiss = { showCreatorDialog = false })
     }
 
-    // Implémentation du contrat ApiKeyContract.View
+    // -------------------------------------------------------------------------------------
+    // CONTRAT DE COMMUNICATION VUE <-> PRESENTER (MVP)
+    // -------------------------------------------------------------------------------------
     val apiKeyView = remember {
         object : ApiKeyContract.View {
             override fun displayApiKeys(keys: List<ApiKey>) {
@@ -129,6 +151,7 @@ fun ApiKeyScreen(
         }
     }
 
+    // Attachement du Presenter au cycle de vie du composant Compose
     DisposableEffect(presenter) {
         presenter.attachView(apiKeyView)
         onDispose {
@@ -144,8 +167,8 @@ fun ApiKeyScreen(
                     editingKey = null
                     showAddEditDialog = true
                 },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
+                containerColor = YouTubeRed,
+                contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.testTag("fab_add_api_key")
             ) {
@@ -160,7 +183,7 @@ fun ApiKeyScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Bannière explicative Quotas & Guide
+            // Bannière explicative & contact WhatsApp créateur
             ApiKeyGuideHeader(
                 onAddKeyClick = {
                     editingKey = null
@@ -171,7 +194,7 @@ fun ApiKeyScreen(
                 }
             )
 
-            // Liste des clés configurées
+            // Liste des clés ou vue vide si aucune clé
             if (isLoading && keyList.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -189,8 +212,8 @@ fun ApiKeyScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag("api_keys_list"),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
                         Text(
@@ -224,7 +247,7 @@ fun ApiKeyScreen(
         }
     }
 
-    // Dialogue d'ajout / modification
+    // Dialogue d'ajout ou d'édition d'une clé API
     if (showAddEditDialog) {
         AddEditApiKeyDialog(
             initialKey = editingKey,
@@ -238,7 +261,7 @@ fun ApiKeyScreen(
         )
     }
 
-    // Dialogue de confirmation de suppression
+    // Dialogue de confirmation avant suppression
     if (keyToDelete != null) {
         ConfirmDeleteDialog(
             title = "Supprimer la clé API",
@@ -251,13 +274,16 @@ fun ApiKeyScreen(
     }
 }
 
+/**
+ * 📘 BANNIÈRE D'EXPLICATION DES QUOTAS & CONTACT SAMUEL DRIVER
+ */
 @Composable
 private fun ApiKeyGuideHeader(
     onAddKeyClick: () -> Unit,
     onShowCreatorClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
@@ -271,15 +297,15 @@ private fun ApiKeyGuideHeader(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp)
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(38.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Key,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -291,7 +317,7 @@ private fun ApiKeyGuideHeader(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Stockage 100% local (Room) & Fallback Quota",
+                        text = "Stockage 100% local (Room) & Rotation Quota",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -301,19 +327,19 @@ private fun ApiKeyGuideHeader(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Pour interroger YouTube, créez gratuitement une clé API sur la Google Cloud Console en activant l'API 'YouTube Data API v3'. Vous pouvez enregistrer plusieurs clés pour basculer facilement en cas de dépassement de quota (10 000 unités/jour).",
+                text = "Pour interroger YouTube, créez gratuitement une clé API sur la Google Cloud Console (10 000 unités/jour). Vous pouvez en enregistrer plusieurs pour basculer facilement.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Bouton vers la fiche Développeur / Créateur SAMUEL DRIVER
+            // Bouton contact Créateur SAMUEL DRIVER
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -375,6 +401,9 @@ private fun ApiKeyGuideHeader(
     }
 }
 
+/**
+ * 💳 CARTE REPRÉSENTANT UNE CLÉ API ENREGISTRÉE
+ */
 @Composable
 private fun ApiKeyCard(
     apiKey: ApiKey,
@@ -383,9 +412,9 @@ private fun ApiKeyCard(
     onDelete: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (apiKey.isDefault) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface
+            containerColor = if (apiKey.isDefault) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
         ),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(
@@ -397,7 +426,7 @@ private fun ApiKeyCard(
             .fillMaxWidth()
             .testTag("api_key_card_${apiKey.id}")
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -408,7 +437,7 @@ private fun ApiKeyCard(
                         imageVector = Icons.Default.VpnKey,
                         contentDescription = null,
                         tint = if (apiKey.isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -425,17 +454,17 @@ private fun ApiKeyCard(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
                                 tint = AccentGreen,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Active par défaut",
+                                text = "Active",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = AccentGreen
@@ -445,7 +474,7 @@ private fun ApiKeyCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = NumberFormatUtils.maskApiKey(apiKey.apiKey),
@@ -461,7 +490,7 @@ private fun ApiKeyCard(
                 modifier = Modifier.padding(top = 2.dp)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -471,37 +500,37 @@ private fun ApiKeyCard(
                 if (!apiKey.isDefault) {
                     Button(
                         onClick = onSetDefault,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.height(34.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp)
                     ) {
-                        Text("Définir par défaut", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("Définir par défaut", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                 }
 
                 IconButton(
                     onClick = onEdit,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Modifier",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Supprimer",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -509,6 +538,9 @@ private fun ApiKeyCard(
     }
 }
 
+/**
+ * 📭 VUE QUAND AUCUNE CLÉ API N'EST CONFIGURÉE
+ */
 @Composable
 private fun EmptyApiKeysView(onAddKeyClick: () -> Unit) {
     Box(
@@ -523,15 +555,15 @@ private fun EmptyApiKeysView(onAddKeyClick: () -> Unit) {
         ) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(72.dp)
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.size(64.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Key,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(36.dp)
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             }
@@ -558,13 +590,14 @@ private fun EmptyApiKeysView(onAddKeyClick: () -> Unit) {
 
             Button(
                 onClick = onAddKeyClick,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(14.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Ajouter ma première clé API", fontWeight = FontWeight.Bold)
+                Text("Ajouter ma première clé API", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
     }
 }
+

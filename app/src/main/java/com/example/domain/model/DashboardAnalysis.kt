@@ -14,6 +14,8 @@ package com.example.domain.model
 data class DashboardAnalysis(
     val channel: ChannelDetails,
     val top5Videos: List<VideoItem>,
+    val top5MostCommentedVideos: List<VideoItem> = emptyList(),
+    val top5LongestVideos: List<VideoItem> = emptyList(),
     val mostViewedVideo: VideoItem?,
     val mostCommentedVideo: VideoItem?,
     val isFromCache: Boolean = false,

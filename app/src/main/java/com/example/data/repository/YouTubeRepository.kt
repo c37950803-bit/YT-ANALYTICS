@@ -221,14 +221,27 @@ class YouTubeRepositoryImpl(
                 }
             }
 
-            // Calcul des champions et du Top 5
+            // Calcul des champions et des différents classements Top 5
             val mostViewedVideo = processedVideos.maxByOrNull { it.viewCount }
             val mostCommentedVideo = processedVideos.maxByOrNull { it.commentCount }
 
+            // 1. Top 5 par nombre de vues
             val top5Videos = processedVideos
                 .sortedByDescending { it.viewCount }
                 .take(5)
                 .mapIndexed { index, video -> video.copy(rank = index + 1, isTop5 = true) }
+
+            // 2. Top 5 par nombre de commentaires
+            val top5MostCommentedVideos = processedVideos
+                .sortedByDescending { it.commentCount }
+                .take(5)
+                .mapIndexed { index, video -> video.copy(rank = index + 1) }
+
+            // 3. Top 5 des vidéos les plus longues (par durée en secondes)
+            val top5LongestVideos = processedVideos
+                .sortedByDescending { it.durationSeconds }
+                .take(5)
+                .mapIndexed { index, video -> video.copy(rank = index + 1) }
 
             val top5Ids = top5Videos.map { it.videoId }.toSet()
             val finalVideos = processedVideos.map { video ->
@@ -245,6 +258,8 @@ class YouTubeRepositoryImpl(
             val analysis = DashboardAnalysis(
                 channel = channelDetails,
                 top5Videos = top5Videos,
+                top5MostCommentedVideos = top5MostCommentedVideos,
+                top5LongestVideos = top5LongestVideos,
                 mostViewedVideo = mostViewedVideo?.copy(isMostViewed = true),
                 mostCommentedVideo = mostCommentedVideo?.copy(isMostCommented = true),
                 isFromCache = false,
@@ -374,9 +389,22 @@ class YouTubeRepositoryImpl(
         val channel = channelEntity.toDomain()
         val videos = videoEntities.map { it.toDomain() }
 
+        // 1. Top 5 par Vues
         val top5 = videos.filter { it.isTop5 }.sortedByDescending { it.viewCount }.ifEmpty {
             videos.sortedByDescending { it.viewCount }.take(5)
         }.mapIndexed { index, item -> item.copy(rank = index + 1) }
+
+        // 2. Top 5 par Commentaires
+        val top5Commented = videos
+            .sortedByDescending { it.commentCount }
+            .take(5)
+            .mapIndexed { index, item -> item.copy(rank = index + 1) }
+
+        // 3. Top 5 par Durée (les plus longues)
+        val top5Longest = videos
+            .sortedByDescending { it.durationSeconds }
+            .take(5)
+            .mapIndexed { index, item -> item.copy(rank = index + 1) }
 
         val mostViewed = videos.firstOrNull { it.isMostViewed }
             ?: videos.maxByOrNull { it.viewCount }
@@ -387,6 +415,8 @@ class YouTubeRepositoryImpl(
         return DashboardAnalysis(
             channel = channel,
             top5Videos = top5,
+            top5MostCommentedVideos = top5Commented,
+            top5LongestVideos = top5Longest,
             mostViewedVideo = mostViewed,
             mostCommentedVideo = mostCommented,
             isFromCache = true,

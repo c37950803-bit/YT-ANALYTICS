@@ -80,15 +80,31 @@ import com.example.presentation.home.HomeScreen
 import com.example.presentation.player.PlayerPresenter
 import com.example.presentation.player.PlayerScreen
 import com.example.ui.theme.AccentGreenActive
-import com.example.ui.theme.PolishBackgroundLight
-import com.example.ui.theme.PolishOutlineLight
-import com.example.ui.theme.PurplePrimary
-import com.example.ui.theme.PurplePrimaryContainer
-import com.example.ui.theme.PurpleOnPrimaryContainer
+import com.example.ui.theme.YouTubeRed
 import kotlinx.coroutines.launch
 
 /**
- * Conteneur principal de l'application avec Navigation Drawer (Tiroir de navigation) - Thème Professional Polish.
+ * =========================================================================================
+ * 🗺️ CONTENEUR PRINCIPAL DE NAVIGATION : MainAppScaffold.kt
+ * =========================================================================================
+ * 
+ * 💡 EXPLICATION GRAND DÉBUTANT (Comment se déplace-t-on dans l'application ?) :
+ * 
+ * 1. QU'EST-CE QU'UN "SCAFFOLD" ?
+ *    - En anglais, Scaffold veut dire "Échafaudage".
+ *    - C'est le cadre général qui tient tout l'immeuble de l'application :
+ *      la barre du haut (TopAppBar), le tiroir latéral glissant (Navigation Drawer),
+ *      et la zone centrale où s'affichent les différentes pages.
+ * 
+ * 2. COMMENT FONCTIONNE LE TIROIR DE NAVIGATION (ModalNavigationDrawer) ?
+ *    - Quand l'utilisateur clique sur le bouton Menu (les 3 petites lignes en haut à gauche),
+ *      un panneau glisse élégamment depuis la gauche.
+ *    - Il permet de naviguer entre :
+ *      1. L'Accueil (Historique des chaînes)
+ *      2. Le Tableau de bord (Analyses et Top 5)
+ *      3. Le Gestionnaire de clés API YouTube
+ *      4. La page À propos & Architecture
+ *      5. Le raccourci vers le Créateur "SAMUEL DRIVER" avec contact WhatsApp direct !
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,13 +112,17 @@ fun MainAppScaffold(
     container: AppContainer,
     modifier: Modifier = Modifier
 ) {
+    // État du tiroir latéral (ouvert ou fermé)
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    // Page actuellement affichée à l'écran
     var currentDestination by remember { mutableStateOf<AppDestination>(AppDestination.Home) }
     var lastActiveChannelQuery by remember { mutableStateOf<String?>(null) }
 
-    // Instanciation des Presenters MVP
+    // -------------------------------------------------------------------------------------
+    // INSTANCIATION DES PRESENTERS (Architecture MVP)
+    // -------------------------------------------------------------------------------------
     val homePresenter = remember {
         HomePresenter(
             youTubeRepository = container.youTubeRepository,
@@ -127,6 +147,9 @@ fun MainAppScaffold(
         PlayerPresenter()
     }
 
+    // -------------------------------------------------------------------------------------
+    // TIROIR LATÉRAL GLISSANT (Drawer)
+    // -------------------------------------------------------------------------------------
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -134,7 +157,7 @@ fun MainAppScaffold(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.width(300.dp)
             ) {
-                // En-tête du Drawer
+                // En-tête du menu tiroir
                 DrawerHeader()
 
                 HorizontalDivider(
@@ -163,8 +186,12 @@ fun MainAppScaffold(
                     unselectedIcon = Icons.Outlined.Dashboard,
                     testTag = "drawer_item_dashboard",
                     onClick = {
-                        val target = lastActiveChannelQuery ?: "@MrBeast"
-                        currentDestination = AppDestination.Dashboard(target)
+                        val target = lastActiveChannelQuery
+                        if (target != null) {
+                            currentDestination = AppDestination.Dashboard(target)
+                        } else {
+                            currentDestination = AppDestination.Home
+                        }
                         scope.launch { drawerState.close() }
                     }
                 )
@@ -187,7 +214,7 @@ fun MainAppScaffold(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                 )
 
-                // 4. À propos
+                // 4. À propos & Quotas
                 DrawerNavItem(
                     label = "À propos & Quotas",
                     selected = currentDestination is AppDestination.About,
@@ -202,12 +229,15 @@ fun MainAppScaffold(
 
                 Spacer(modifier = Modifier.weight(1f, fill = true))
 
-                // Footer Créateur / WhatsApp
+                // Footer Créateur / Contact WhatsApp SAMUEL DRIVER
                 DrawerCreatorFooter()
             }
         },
         modifier = modifier
     ) {
+        // ---------------------------------------------------------------------------------
+        // ROUTAGE VERS LES DIFFÉRENTS ÉCRANS DE L'APPLICATION
+        // ---------------------------------------------------------------------------------
         when (val dest = currentDestination) {
             is AppDestination.Home -> {
                 Scaffold(
@@ -217,21 +247,21 @@ fun MainAppScaffold(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Surface(
                                         shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = YouTubeRed,
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Text(
                                                 text = "YT",
-                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                color = Color.White,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
+                                                fontSize = 13.sp
                                             )
                                         }
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "YT Analytics",
+                                        text = "YouTube Analytics",
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleMedium
                                     )
@@ -242,14 +272,14 @@ fun MainAppScaffold(
                                     onClick = { scope.launch { drawerState.open() } },
                                     modifier = Modifier.testTag("btn_open_drawer")
                                 ) {
-                                    Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                    Icon(Icons.Default.Menu, contentDescription = "Ouvrir le menu")
                                 }
                             },
                             actions = {
-                                // Badge statut API avec point vert
+                                // Petit badge vert indiquant que l'API est prête
                                 Surface(
                                     shape = RoundedCornerShape(100.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
                                     modifier = Modifier.padding(end = 8.dp)
                                 ) {
                                     Row(
@@ -267,7 +297,7 @@ fun MainAppScaffold(
                                             text = "API ACTIVE",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             letterSpacing = 0.5.sp
                                         )
                                     }
@@ -337,8 +367,12 @@ fun MainAppScaffold(
                     videoTitle = dest.title,
                     presenter = playerPresenter,
                     onNavigateBack = {
-                        val fallback = lastActiveChannelQuery ?: "@MrBeast"
-                        currentDestination = AppDestination.Dashboard(fallback)
+                        val active = lastActiveChannelQuery
+                        if (active != null) {
+                            currentDestination = AppDestination.Dashboard(active)
+                        } else {
+                            currentDestination = AppDestination.Home
+                        }
                     }
                 )
             }
@@ -369,6 +403,9 @@ fun MainAppScaffold(
     }
 }
 
+/**
+ * 🏷️ EN-TÊTE DU MENU TIROIR (DrawerHeader)
+ */
 @Composable
 private fun DrawerHeader() {
     Column(
@@ -377,16 +414,16 @@ private fun DrawerHeader() {
             .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 12.dp)
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(52.dp)
+            shape = RoundedCornerShape(14.dp),
+            color = YouTubeRed,
+            modifier = Modifier.size(48.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
                     text = "YT",
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp
+                    fontSize = 18.sp
                 )
             }
         }
@@ -394,21 +431,24 @@ private fun DrawerHeader() {
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "YT Analytics",
-            style = MaterialTheme.typography.titleLarge,
+            text = "YouTube Analytics",
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
 
         Text(
-            text = "Professional Polish Edition • MVP",
+            text = "Édition Minimaliste Épurée • MVP",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
         )
     }
 }
 
+/**
+ * 📌 ÉLÉMENT INDIVIDUEL DU TIROIR DE NAVIGATION (DrawerNavItem)
+ */
 @Composable
 private fun DrawerNavItem(
     label: String,
@@ -434,25 +474,28 @@ private fun DrawerNavItem(
                 tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = NavigationDrawerItemDefaults.colors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            unselectedTextColor = MaterialTheme.colorScheme.onSurface
+            selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         modifier = Modifier
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 3.dp)
             .testTag(testTag)
     )
 }
 
+/**
+ * 👤 PIED DE PAGE CRÉATEUR & WHATSAPP (DrawerCreatorFooter)
+ * Met en valeur SAMUEL DRIVER (+237 659 39 34 46)
+ */
 @Composable
 private fun DrawerCreatorFooter() {
     val context = LocalContext.current
     val rawPhoneNumber = "237659393446"
     val formattedPhoneNumber = "+237 659 39 34 46"
     val developerName = "SAMUEL DRIVER"
-    val prefilledMessage = "Bonjour, je suis intéressé par l'application YT Analytics"
     var showDialog by remember { mutableStateOf(false) }
 
     if (showDialog) {
@@ -472,11 +515,12 @@ private fun DrawerCreatorFooter() {
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             ),
             border = CardDefaults.outlinedCardBorder().copy(
-                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
             ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
@@ -491,14 +535,14 @@ private fun DrawerCreatorFooter() {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = Color(0xFF25D366),
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Chat,
                             contentDescription = "WhatsApp",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -515,7 +559,7 @@ private fun DrawerCreatorFooter() {
                     Text(
                         text = "LE CRÉATEUR ($formattedPhoneNumber)",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -523,4 +567,5 @@ private fun DrawerCreatorFooter() {
         }
     }
 }
+
 

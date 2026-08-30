@@ -11,56 +11,83 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
+/**
+ * =========================================================================================
+ * 🎭 FICHIER DU THÈME PRINCIPAL (Theme.kt)
+ * =========================================================================================
+ * 
+ * 💡 POURQUOI CE FICHIER EXISTE ? (Pour débutants complets) :
+ * Imagine que ton application Android est une maison. Ce fichier est l'architecte et le
+ * décorateur d'intérieur ! C'est lui qui dit :
+ * - "Quand le téléphone est en mode sombre, voici les couleurs à appliquer automatiquement".
+ * - "Quand le téléphone est en mode clair, voici les couleurs lumineuses".
+ * 
+ * 🛠️ COMMENT ÇA MARCHE (Jetpack Compose) :
+ * `MaterialTheme` est le cœur du design de Google (Material Design 3). En englobant nos
+ * écrans dans `MyApplicationTheme`, chaque bouton, texte et carte sait exactement quelle
+ * couleur adopter sans qu'on ait besoin de lui répéter à chaque fois !
+ */
+
+// 🌙 CONFIGURATION DU MODE SOMBRE (Minimaliste Dark)
 private val DarkColorScheme = darkColorScheme(
-    primary = PurplePrimaryDark,
-    onPrimary = PurpleOnPrimaryDark,
-    primaryContainer = PurplePrimaryContainerDark,
-    onPrimaryContainer = PurpleOnPrimaryContainerDark,
-    secondary = PurpleSecondaryContainer,
-    onSecondary = PurpleOnSecondaryContainer,
-    secondaryContainer = Color(0xFF4A4458),
-    onSecondaryContainer = Color(0xFFE8DEF8),
-    tertiary = PurpleTertiaryContainer,
-    onTertiary = PurpleOnTertiaryContainer,
-    tertiaryContainer = Color(0xFF633B48),
-    onTertiaryContainer = Color(0xFFFFD8E4),
-    background = PolishBackgroundDark,
-    onBackground = PolishTextPrimaryDark,
-    surface = PolishSurfaceDark,
-    onSurface = PolishTextPrimaryDark,
-    surfaceVariant = PolishSurfaceVariantDark,
-    onSurfaceVariant = PolishTextSecondaryDark,
-    outline = PolishOutlineDark,
-    outlineVariant = PolishOutlineVariantDark
+    primary = MinimalistPrimaryDark,
+    onPrimary = MinimalistOnPrimaryDark,
+    primaryContainer = MinimalistPrimaryContainerDark,
+    onPrimaryContainer = MinimalistOnPrimaryContainerDark,
+    secondary = YouTubeRed,
+    onSecondary = Color.White,
+    secondaryContainer = MinimalistSurfaceVariantDark,
+    onSecondaryContainer = MinimalistTextPrimaryDark,
+    tertiary = AccentGreen,
+    onTertiary = Color.White,
+    tertiaryContainer = AccentGreenContainer,
+    onTertiaryContainer = AccentGreenOnContainer,
+    background = MinimalistBackgroundDark,
+    onBackground = MinimalistTextPrimaryDark,
+    surface = MinimalistSurfaceDark,
+    onSurface = MinimalistTextPrimaryDark,
+    surfaceVariant = MinimalistSurfaceVariantDark,
+    onSurfaceVariant = MinimalistTextSecondaryDark,
+    outline = MinimalistBorderDark,
+    outlineVariant = MinimalistBorderSubtleDark
 )
 
+// ☀️ CONFIGURATION DU MODE CLAIR (Minimaliste Light)
 private val LightColorScheme = lightColorScheme(
-    primary = PurplePrimary,
-    onPrimary = PurpleOnPrimary,
-    primaryContainer = PurplePrimaryContainer,
-    onPrimaryContainer = PurpleOnPrimaryContainer,
-    secondary = PurpleSecondary,
-    onSecondary = PurpleOnSecondary,
-    secondaryContainer = PurpleSecondaryContainer,
-    onSecondaryContainer = PurpleOnSecondaryContainer,
-    tertiary = PurpleTertiary,
-    onTertiary = PurpleOnTertiary,
-    tertiaryContainer = PurpleTertiaryContainer,
-    onTertiaryContainer = PurpleOnTertiaryContainer,
-    background = PolishBackgroundLight,
-    onBackground = PolishTextPrimaryLight,
-    surface = PolishSurfaceLight,
-    onSurface = PolishTextPrimaryLight,
-    surfaceVariant = PolishSurfaceVariantLight,
-    onSurfaceVariant = PolishTextSecondaryLight,
-    outline = PolishOutlineLight,
-    outlineVariant = PolishOutlineVariantLight
+    primary = MinimalistPrimaryLight,
+    onPrimary = MinimalistOnPrimaryLight,
+    primaryContainer = MinimalistPrimaryContainerLight,
+    onPrimaryContainer = MinimalistOnPrimaryContainerLight,
+    secondary = YouTubeRed,
+    onSecondary = Color.White,
+    secondaryContainer = YouTubeRedContainer,
+    onSecondaryContainer = YouTubeRedOnContainer,
+    tertiary = AccentGreen,
+    onTertiary = Color.White,
+    tertiaryContainer = AccentGreenContainer,
+    onTertiaryContainer = AccentGreenOnContainer,
+    background = MinimalistBackgroundLight,
+    onBackground = MinimalistTextPrimaryLight,
+    surface = MinimalistSurfaceLight,
+    onSurface = MinimalistTextPrimaryLight,
+    surfaceVariant = MinimalistSurfaceVariantLight,
+    onSurfaceVariant = MinimalistTextSecondaryLight,
+    outline = MinimalistBorderLight,
+    outlineVariant = MinimalistBorderSubtleLight
 )
 
+/**
+ * 🌟 COMPOSABLE DU THÈME GLOBAL :
+ * C'est cette fonction qui entoure toute l'application dans `MainActivity.kt`.
+ * 
+ * @param darkTheme : Détecte automatiquement si le téléphone de l'utilisateur est en mode Nuit.
+ * @param dynamicColor : Désactivé pour garantir le design minimaliste soigné et cohérent.
+ * @param content : Le code des écrans de l'application qui seront affichés à l'intérieur.
+ */
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Keep Professional Polish theme consistent
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -78,4 +105,5 @@ fun MyApplicationTheme(
         content = content
     )
 }
+
 

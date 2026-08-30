@@ -1,5 +1,7 @@
 package com.example.domain.model
 
+import com.example.util.NumberFormatUtils
+
 /**
  * Modèle de domaine représentant une vidéo avec ses métriques de performance.
  */
@@ -18,4 +20,10 @@ data class VideoItem(
     val isMostViewed: Boolean = false,
     val isMostCommented: Boolean = false,
     val rank: Int = 0
-)
+) {
+    val durationSeconds: Long
+        get() = NumberFormatUtils.parseIsoDurationToSeconds(durationIso)
+
+    val formattedDuration: String
+        get() = NumberFormatUtils.formatIsoDuration(durationIso)
+}
